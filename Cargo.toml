@@ -1,0 +1,15 @@
+[package]
+name = "airfoil-to-stl"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kurbo = "0.10"
+
+truck-modeling = "0.5.*"
+truck-polymesh = "0.5.*"
+truck-meshalgo = "*"
+truck-topology = "*"
+clap = { version = "4.5.1", features = ["derive"] }
