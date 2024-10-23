@@ -21,3 +21,8 @@ Options:
 ```
 
 It takes Selig-formatted airfoil data (for instance, downloaded from http://airfoiltools.com/) and generates an STL based on the input parameters.
+
+
+## Thanks
+
+Big thanks to @Markk116 for [helping out](https://github.com/ricosjp/truck/issues/58#issuecomment-2371474180) with some of the modelling.

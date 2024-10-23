@@ -101,28 +101,6 @@ fn solid_to_stl(s: Solid, tolerance: f64) -> Vec<u8> {
     out
 }
 
-fn extrude_then_transform<T: Sweep<Point3, Curve, Surface>>(
-    elem: &T,
-    extrude: Vector3,
-    transform: Matrix4,
-) -> T::Swept {
-    let trsl_ex = Matrix4::from_translation(extrude);
-    elem.sweep(
-        &move |pt| transform.transform_point(trsl_ex.transform_point(*pt)),
-        &move |curve| curve.transformed(trsl_ex).transformed(transform),
-        &move |surface| surface.transformed(trsl_ex).transformed(transform),
-        &move |pt0, pt1| Curve::Line(Line(*pt0, *pt1)),
-        &move |curve0, curve1| match (curve0, curve1) {
-            (Curve::Line(line), Curve::Line(_)) => Surface::Plane(Plane::new(
-                line.0,
-                line.1,
-                transform.transform_point(line.1) + extrude,
-            )),
-            _ => unreachable!(),
-        },
-    )
-}
-
 fn main() {
     let args = Args::parse();
     let reader = BufReader::new(File::open(args.file).expect("failed opening file"));
@@ -166,24 +144,27 @@ fn main() {
         path.push(PathEl::LineTo((numbers[0], numbers[1]).into()));
     }
 
+    let scale_mat = Matrix4::from_nonuniform_scale(
+        args.tip_chord / args.root_chord,
+        args.tip_chord / args.root_chord,
+        1.,
+    );
+    let translate_mat = Matrix4::from_translation(args.sweep * Vector3::unit_x())
+        + Matrix4::from_translation(args.semi_wingspan * Vector3::unit_z());
+
     let profile = builder::scaled(
         &wire_from_path(path, &mut HashMap::new()),
         Point3::new(0., 0., 0.),
         Vector3::new(args.root_chord, args.root_chord, args.root_chord),
     );
-    let face: Face = builder::try_attach_plane(&vec![profile]).unwrap();
-    let base: Shell = extrude_then_transform(
-        &face,
-        args.semi_wingspan * Vector3::unit_z(),
-        Matrix4::from_nonuniform_scale(
-            args.tip_chord / args.root_chord,
-            args.tip_chord / args.root_chord,
-            1.,
-        ) + Matrix4::from_translation(args.sweep * Vector3::unit_x()),
-    )
-    .into_boundaries()
-    .pop()
-    .unwrap();
+    let bottom: Wire = profile.clone();
+    let top = builder::transformed(&profile, scale_mat + translate_mat);
+
+    let mut base: Shell = builder::try_wire_homotopy(&bottom, &top).unwrap();
+
+    // Inverted bc opposite faces must have opposite normals
+    base.push(builder::try_attach_plane(&[bottom]).unwrap().inverse());
+    base.push(builder::try_attach_plane(&[top]).unwrap());
 
     let solid = Solid::new(vec![base]);
     let mut f = File::create(args.outfile).expect("Unable to create file");
